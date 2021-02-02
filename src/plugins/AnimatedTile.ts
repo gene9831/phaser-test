@@ -45,12 +45,10 @@ export class AnimatedTile extends Phaser.Plugins.ScenePlugin {
               ...(idToTileData[anim.tileid] || {}),
               animation: tileData.animation,
             };
-            console.log(anim.tileid, idToTileData[anim.tileid]);
           }
         });
 
         tileData.animationFrames = frameEnd;
-        console.log(tileData);
 
         return tileData;
       });
@@ -76,15 +74,11 @@ export class AnimatedTile extends Phaser.Plugins.ScenePlugin {
     const currentFrame = frames % this.fps;
     this.layers?.forEach((layer) => {
       layer.layer.data
-        .filter(
-          (row) => row[0].pixelY + row[0].height >= camera.scrollY && row[0].pixelY <= camera.scrollY + camera.height
-        )
+        .filter((row) => row[0].bottom >= camera.scrollY && row[0].pixelY <= camera.scrollY + camera.height)
         .forEach((row) => {
           row
             .filter((tile) => tile.index >= 0)
-            .filter(
-              (tile) => tile.pixelX + tile.width >= camera.scrollX && tile.pixelX <= camera.scrollX + camera.width
-            )
+            .filter((tile) => tile.right >= camera.scrollX && tile.pixelX <= camera.scrollX + camera.width)
             .forEach((tile) => {
               const data = tile.tileset.getTileData(tile.index) as TileDataOrNull;
 

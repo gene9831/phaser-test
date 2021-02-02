@@ -8,7 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 1152,
   height: 672,
-  zoom: 0.75,
+  // zoom: 0.75,
   physics: {
     default: "arcade",
     arcade: {

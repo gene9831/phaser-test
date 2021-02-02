@@ -1,21 +1,19 @@
 import Phaser from "phaser";
-import { AnimatedTile, SuperMarioBlock } from "~/plugins";
-import TileMapUtils from "./tilemap/TileMapUtils";
+import { AnimatedTile, ShadowManager, SuperMarioBlock } from "~/plugins";
+import { addKeys, addSprite } from "./TestAdder";
 import { TileMapConfig } from "./tilemap/Types";
-
-type NESController = Record<"left" | "right" | "up" | "down" | "buttonA" | "buttonB", Phaser.Input.Keyboard.Key>;
+import * as path from "path";
 
 export default class HelloWorldScene extends Phaser.Scene {
   private tileMapConfig!: TileMapConfig;
-
-  private keys?: NESController;
-  private sprite?: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
 
   private elapsedFrames: number = 0;
 
   private animatedTile?: AnimatedTile;
   private superMarioBlock?: SuperMarioBlock;
+  private shadowManager?: ShadowManager;
 
+  private drawDebug = true;
   private debugText?: Phaser.GameObjects.Text;
 
   constructor() {
@@ -45,101 +43,60 @@ export default class HelloWorldScene extends Phaser.Scene {
       url: SuperMarioBlock,
       sceneKey: "superMarioBlock",
     });
+
+    this.load.scenePlugin({
+      key: "ShadowManager",
+      url: ShadowManager,
+      sceneKey: "shadowManager",
+    });
   }
 
   create() {
-    const { tilemap: map, tilesets } = TileMapUtils.makeTileMap(this, 0, this.tileMapConfig);
+    const level = this.make.tilemap({ key: this.tileMapConfig.mapKeys[0] });
+    const tilesets = level.tilesets.map((tileset) =>
+      level.addTilesetImage(tileset.name, path.join(this.tileMapConfig.setsPath || "", tileset.name))
+    );
 
-    const layers = map.layers
+    const layers = level.layers
       .filter((layerData) => layerData.name.startsWith("地形"))
-      .map((layerData) => map.createLayer(layerData.name, tilesets));
+      .map((layerData) => level.createLayer(layerData.name, tilesets));
 
     this.animatedTile?.init({ layers, tilesets });
+    this.shadowManager?.init({ offsetX: 9, offsetY: 9 });
     this.superMarioBlock?.init({ layers, shadow: { offsetX: 9, offsetY: 9 } });
 
-    this.keys = this.addKeys();
-    this.sprite = this.addSprite();
+    const sprite = addSprite(this);
+    const keys = addKeys(this, sprite);
 
-    this.physics.add.collider(this.sprite, layers, (obj1, obj2: unknown) => {
-      const tile = obj2 as Phaser.Tilemaps.Tile;
-      if (obj1.body.blocked.up && tile.collideDown && tile.faceBottom) {
-        console.log();
-        // 顶砖块动画
-        console.log(tile);
-      }
-    });
+    this.shadowManager?.shade(sprite);
+
+    this.physics.add.collider(
+      sprite,
+      layers,
+      this.superMarioBlock?.playerTileCollideCallback,
+      this.superMarioBlock?.playerTileProcessCallback,
+      this.superMarioBlock
+    );
     this.physics.world.setBoundsCollision(true, true, false, false);
 
     this.cameras.main.setBackgroundColor("#7686ff");
-    // this.cameras.main.startFollow(this.sprite);
+    // this.cameras.main.startFollow(sprite);
+
+    this.events.on("postupdate", this.postUpdate, this);
 
     this.debugText = this.addDebugText();
   }
 
   update(t: number, dt: number) {
     this.animatedTile?.update(t, dt, this.elapsedFrames, this.cameras.main);
+  }
 
-    if (this.elapsedFrames % 30 === 0) {
-      this.debugText?.setText(`fps: ${this.game.loop.actualFps.toFixed(3)}
-delta: ${dt.toFixed(3)}
-`);
-    }
-
+  postUpdate(t: number, dt: number) {
     this.elapsedFrames += 1;
   }
 
-  private addKeys() {
-    const controller = this.input.keyboard.addKeys({
-      left: Phaser.Input.Keyboard.KeyCodes.A,
-      right: Phaser.Input.Keyboard.KeyCodes.D,
-      up: Phaser.Input.Keyboard.KeyCodes.W,
-      down: Phaser.Input.Keyboard.KeyCodes.S,
-      buttonA: Phaser.Input.Keyboard.KeyCodes.SPACE,
-      buttonB: Phaser.Input.Keyboard.KeyCodes.SHIFT,
-    }) as NESController;
-
-    this.events.on("update", () => {
-      if (this.sprite) {
-        const speed = 200;
-        if (controller.left.isDown) {
-          this.sprite.setVelocityX(-speed);
-        } else if (controller.right.isDown) {
-          this.sprite.setVelocityX(speed);
-        } else {
-          this.sprite.setVelocityX(0);
-        }
-      }
-    });
-
-    controller.buttonA.on("down", () => {
-      if (this.sprite?.body.blocked.down) {
-        this.sprite.setVelocityY(-800);
-      }
-    });
-
-    return controller;
-  }
-
-  private addSprite() {
-    const sprite = this.physics.add
-      .sprite(150, this.scale.height - 48 * 2.5, "mario")
-      .setGravityY(1000)
-      .setMaxVelocity(Infinity, 800)
-      .setCollideWorldBounds(true);
-
-    return sprite;
-  }
-
-  private removeTile(layer: Phaser.Tilemaps.TilemapLayer, x: number, y: number) {
-    const tile = layer.layer.data[y][x];
-    tile.destroy();
-    // 设置index为-1之后，tile.tileset会变成null
-    tile.index = -1;
-    tile.setCollision(false);
-  }
-
   private addDebugText() {
-    return this.add
+    const debugText = this.add
       .text(5, 5, "debug", {
         color: "#FFF",
         fontSize: "24px",
@@ -150,5 +107,20 @@ delta: ${dt.toFixed(3)}
         },
       })
       .setScrollFactor(0);
+
+    this.input.keyboard.on("keydown-BACKSPACE", () => {
+      this.drawDebug = !this.drawDebug;
+      this.physics.world.drawDebug = this.drawDebug;
+      this.physics.world.debugGraphic.setVisible(this.drawDebug);
+      this.debugText?.setActive(this.drawDebug).setVisible(this.drawDebug);
+    });
+
+    this.events.on("update", (t: number, dt: number) => {
+      if (this.elapsedFrames % 10 === 0) {
+        this.debugText?.setText(`fps: ${this.game.loop.actualFps.toFixed(3)}\ndelta: ${dt.toFixed(3)}\n`);
+      }
+    });
+
+    return debugText;
   }
 }
