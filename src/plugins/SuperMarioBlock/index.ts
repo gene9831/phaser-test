@@ -82,8 +82,6 @@ export class SuperMarioBlock extends Phaser.Plugins.ScenePlugin {
     eventEmitter.on("update", this.update, this);
     eventEmitter.on("shutdown", this.shutdown, this);
     eventEmitter.on("destroy", this.destroy, this);
-
-    // eventEmitter.on("spriteCollidesTile", this.spriteCollidesTile, this);
   }
 
   update(t: number, dt: number) {
@@ -103,103 +101,68 @@ export class SuperMarioBlock extends Phaser.Plugins.ScenePlugin {
   }
 
   private collidesWidthRatio = 6 / 16;
-  playerTileCollideCallback(player: Phaser.Types.Physics.Arcade.GameObjectWithBody, _tile: any) {
-    return;
-
+  playerTileProcessCallback(_player: any, _tile: any) {
+    const player = _player as Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
     const tile = _tile as Tile;
-    const pBody = player.body;
 
-    if (pBody.blocked.up) {
+    if (!tile.visible && tile.properties.hitable && tile.bottom < player.body.center.y && player.body.velocity.y < 0) {
+      const collidesWidth = player.body.width * this.collidesWidthRatio;
+
+      if (player.body.right - collidesWidth < tile.pixelX || player.body.left + collidesWidth > tile.right) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  playerTileCollideCallback(player: Phaser.Types.Physics.Arcade.GameObjectWithBody, _tile: any) {
+    if (player.body.blocked.up) {
+      const tile1 = _tile as Tile;
+      const pBody = player.body;
+
+      const tiles: Tile[] = [];
       const collidesWidth = pBody.width * this.collidesWidthRatio;
 
-      if (
-        tile.properties.hitable &&
-        pBody.right - collidesWidth >= tile.pixelX &&
-        pBody.left + collidesWidth <= tile.right
-      ) {
-        console.log(tile);
+      tiles.push(tile1);
 
-        this.hittingBlockGroup.add(new HittingBlock(this.scene, tile));
-      }
-
-      // 还要collision check透明砖块
-      const offsetX = pBody.left < tile.pixelX ? -1 : pBody.right > tile.right ? 1 : 0;
-      if (offsetX !== 0) {
-        tile.tilemap.layers.reverse().find((layerData) => {
-          const tile2 = layerData.tilemapLayer.getTileAt(tile.x + offsetX, tile.y);
+      const direction = pBody.left < tile1.pixelX ? -1 : pBody.right > tile1.right ? 1 : 0;
+      if (direction !== 0) {
+        tile1.tilemap.layers.reverse().find((layerData) => {
+          const tile2 = layerData.tilemapLayer.getTileAt(tile1.x + direction, tile1.y);
           if (tile2) {
-            if (
-              tile2.properties.hitable &&
-              pBody.right - collidesWidth >= tile2.pixelX &&
-              pBody.left + collidesWidth <= tile2.right
-            ) {
-              console.log(tile2);
-
-              this.hittingBlockGroup.add(new HittingBlock(this.scene, tile2));
-            }
+            tiles.push(tile2);
             return true;
           }
           return false;
         });
       }
-    }
-  }
 
-  playerTileProcessCallback(player: Phaser.Types.Physics.Arcade.GameObjectWithBody, _tile: any) {
-    const tile = _tile as Tile;
-    if (tile.index >= 0 && tile.collideDown && tile.pixelY < player.body.y) {
-      console.log(player.body.x, player.body.y);
-      console.log(tile.pixelX, tile.pixelY);
-      console.log(player.body.velocity);
-      // return false;
-    }
+      tiles
+        .sort((a, b) => a.x - b.x)
+        .forEach((tile) => {
+          if (
+            tile.properties.hitable &&
+            pBody.right - collidesWidth >= tile.pixelX &&
+            pBody.left + collidesWidth <= tile.right
+          ) {
+            this.hittingBlockGroup.add(new HittingBlock(this.scene, tile));
+          }
+        });
 
-    return true;
+      // 顶到边缘补偿一段横向位移
+      if (tiles.length === 1) {
+        const playerAtLeft = pBody.right - tiles[0].pixelX;
+        const playerAtRight = tiles[0].right - pBody.left;
 
-    if (player.body.blocked.up) {
-      const tile = _tile as Tile;
-      const pBody = player.body;
-      const tiles: Tile[] = [];
-      const collidesWidth = pBody.width * this.collidesWidthRatio;
-      console.log(tile);
-      console.log(player.getData("preVelocity"));
-
-      if (
-        tile.properties.hitable &&
-        pBody.right - collidesWidth >= tile.pixelX &&
-        pBody.left + collidesWidth <= tile.right
-      ) {
-        // console.log(tile);
-        // tiles.push(tile);
-        // this.hittingBlockGroup.add(new HittingBlock(this.scene, tile));
+        if (playerAtLeft < collidesWidth) {
+          player.body.x = tiles[0].pixelX - player.body.width;
+          player.body.velocity.y = player.getData("preUpV");
+        } else if (playerAtRight < collidesWidth) {
+          player.body.x = tiles[0].right;
+          player.body.velocity.y = player.getData("preUpV");
+        }
       }
-
-      // player在被撞击的tile的左边还是右边
-      // const direction = pBody.left < tile.pixelX ? -1 : pBody.right > tile.right ? 1 : 0;
-
-      // if (direction !== 0) {
-      //   tile.tilemap.layers.reverse().find((layerData) => {
-      //     const tile2 = layerData.tilemapLayer.getTileAt(tile.x + direction, tile.y);
-      //     if (tile2) {
-      //       if (
-      //         tile2.properties.hitable &&
-      //         pBody.right - collidesWidth >= tile2.pixelX &&
-      //         pBody.left + collidesWidth <= tile2.right
-      //       ) {
-      //         console.log(tile2);
-      //         tiles.push(tile2);
-      //         // this.hittingBlockGroup.add(new HittingBlock(this.scene, tile2));
-      //       }
-      //       return true;
-      //     } else {
-      //       return false;
-      //     }
-      //   });
-      // }
-      return false;
-      return tiles.length > 0;
     }
-
-    return true;
   }
 }

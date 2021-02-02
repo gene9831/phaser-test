@@ -24,8 +24,8 @@ export const addSprite = (scene: Phaser.Scene) => {
   });
 
   scene.events.on("preupdate", () => {
-    if (sprite.body.velocity.x !== 0 || sprite.body.velocity.y !== 0) {
-      sprite.setData("preVelocity", sprite.body.velocity);
+    if (sprite.body.velocity.y < 0) {
+      sprite.setData("preUpV", sprite.body.velocity.y);
     }
   });
 
@@ -56,7 +56,8 @@ export const addKeys = (scene: Phaser.Scene, sprite: Phaser.Physics.Arcade.Sprit
 
   scene.events.on("update", () => {
     if (sprite.scene) {
-      const speed = 90 * 3;
+      const speed = 60 * 3;
+      // const speed = 90 * 3;
       if (controller.left.isDown) {
         sprite.setVelocityX(-speed);
       } else if (controller.right.isDown) {

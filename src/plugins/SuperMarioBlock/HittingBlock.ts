@@ -34,6 +34,7 @@ export class HittingBlock extends Phaser.GameObjects.Image {
       this.scale += this.deltaScale;
 
       if (this.tile.shadow) {
+        this.tile.shadow.setVisible(true);
         this.tile.shadow.y += this.deltaY;
         this.tile.shadow.scale += this.deltaScale;
       }
@@ -41,7 +42,14 @@ export class HittingBlock extends Phaser.GameObjects.Image {
       this.deltaY += this.deltaDeltaY;
       this.deltaScale += this.deltaDeltaScale;
     } else {
+      // 动画完成
       this.tile.setVisible(true).setCollision(true);
+
+      if (this.tile.properties.hitId) {
+        this.tile.index = this.tile.tileset.firstgid + this.tile.properties.hitId;
+        this.tile.properties.hitable = false;
+      }
+
       this.destroy();
     }
 
